@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 )
 
@@ -21,21 +22,39 @@ type Key[T Keyable] string // will return zero value if key is not present or if
 
 type TimeKey string // will return zero value if key is not present or if is not parsable
 
-// if key is not present in Config or cannot be converted into T, Get() return the zero value of T
+// if key is not present in Config or cannot be converted into T, Get() return the zero value of T.
+//
+// conversions are made by reflect.Value.Convert(), and as a special case booleans and strings are
+// automatically parse between each other
 func (k Key[T]) Get(c *Config) T {
 	var ret T
 	v, ok := c.Get(string(k))
 	if !ok {
 		return ret
 	}
+	switch v := v.(type) {
+	case T:
+		return v
+	case bool:
+		if reflect.ValueOf(ret).Kind() == reflect.String {
+			return interface{}(strconv.FormatBool(v)).(T)
+		}
+	case string:
+		if reflect.ValueOf(ret).Kind() == reflect.Bool {
+			b, err := strconv.ParseBool(v)
+			if err == nil {
+				return interface{}(b).(T)
+			}
+		}
+	}
 	rv := reflect.ValueOf(v)
-	if rv.CanConvert(reflect.TypeOf(ret)) {
+	if rv.CanConvert(reflect.TypeOf(ret)) { // does not support string to bool and vice versa
 		return rv.Convert(reflect.TypeOf(ret)).Interface().(T)
 	}
 	return ret
 }
 
-func (k Key[T]) GetErr(c *Config) (T, error) {
+/*func (k Key[T]) GetErr(c *Config) (T, error) {
 	var ret T
 	v, ok := c.Get(string(k))
 	if !ok {
@@ -46,7 +65,7 @@ func (k Key[T]) GetErr(c *Config) (T, error) {
 		return rv.Convert(reflect.TypeOf(ret)).Interface().(T), nil
 	}
 	return ret, fmt.Errorf("config file Get: failed to cast value (wanted type: %T but got type: %T)", ret, v)
-}
+}*/
 
 func (k Key[T]) Put(c *Config, v T) {
 	c.Put(string(k), v)
@@ -61,7 +80,7 @@ func (k TimeKey) Get(c *Config) time.Time {
 	return t
 }
 
-func (k TimeKey) GetErr(c *Config) (time.Time, error) {
+/*func (k TimeKey) GetErr(c *Config) (time.Time, error) {
 	var t time.Time
 	var ck = Key[string](k)
 	str, err := ck.GetErr(c)
@@ -70,7 +89,7 @@ func (k TimeKey) GetErr(c *Config) (time.Time, error) {
 	}
 	err = t.UnmarshalText([]byte(str))
 	return t, err
-}
+}*/
 
 func (k TimeKey) Put(c *Config, v time.Time) {
 	c.Put(string(k), v)
