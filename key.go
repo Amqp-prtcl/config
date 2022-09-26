@@ -18,9 +18,15 @@ type Keyable interface {
 		~float32 | ~float64
 }
 
-type Key[T Keyable] string // will return zero value if key is not present or if is not parsable
+type Key[T Keyable] struct {
+	Key     string
+	Default T
+} // will return zero value if key is not present or if is not parsable
 
-type TimeKey string // will return zero value if key is not present or if is not parsable
+type TimeKey struct {
+	Key     string
+	Default time.Time
+} // will return zero value if key is not present or if is not parsable
 
 // if key is not present in Config or cannot be converted into T, Get() return the zero value of T.
 //
@@ -28,9 +34,9 @@ type TimeKey string // will return zero value if key is not present or if is not
 // automatically parse between each other
 func (k Key[T]) Get(c *Config) T {
 	var ret T
-	v, ok := c.Get(string(k))
+	v, ok := c.Get(k.Key)
 	if !ok {
-		return ret
+		return k.Default
 	}
 	switch v := v.(type) {
 	case T:
@@ -51,12 +57,13 @@ func (k Key[T]) Get(c *Config) T {
 	if rv.CanConvert(reflect.TypeOf(ret)) { // does not support string to bool and vice versa
 		return rv.Convert(reflect.TypeOf(ret)).Interface().(T)
 	}
-	return ret
+	return k.Default
 }
 
+// ignores default value and returns an error if it fails to find or cast loaded value
 func (k Key[T]) GetErr(c *Config) (T, error) {
 	var ret T
-	v, ok := c.Get(string(k))
+	v, ok := c.Get(k.Key)
 	if !ok {
 		return ret, ErrKeyNotFound
 	}
@@ -83,21 +90,34 @@ func (k Key[T]) GetErr(c *Config) (T, error) {
 }
 
 func (k Key[T]) Put(c *Config, v T) {
-	c.Put(string(k), v)
+	c.Put(k.Key, v)
+}
+
+// checks if a valid (castable) value is present in config, if not, default will be added
+func (k Key[T]) Sync(c *Config) {
+	_, err := k.GetErr(c)
+	if err != nil {
+		k.Put(c, k.Default)
+	}
 }
 
 // if key is not present in Config or cannot be converted into T, Get() return the zero value of T
 func (k TimeKey) Get(c *Config) time.Time {
 	var t time.Time
-	var ck = Key[string](k)
-	str := ck.Get(c)
-	_ = t.UnmarshalText([]byte(str))
+	var ck = Key[string]{k.Key, ""}
+	str, err := ck.GetErr(c)
+	if err != nil {
+		return k.Default
+	}
+	if err = t.UnmarshalText([]byte(str)); err != nil {
+		return k.Default
+	}
 	return t
 }
 
 func (k TimeKey) GetErr(c *Config) (time.Time, error) {
 	var t time.Time
-	var ck = Key[string](k)
+	var ck = Key[string]{k.Key, ""}
 	str, err := ck.GetErr(c)
 	if err != nil {
 		return t, err
@@ -107,5 +127,5 @@ func (k TimeKey) GetErr(c *Config) (time.Time, error) {
 }
 
 func (k TimeKey) Put(c *Config, v time.Time) {
-	c.Put(string(k), v)
+	c.Put(k.Key, v)
 }

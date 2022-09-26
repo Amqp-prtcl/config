@@ -42,19 +42,13 @@ type Config struct {
 // ints; units; and float32 are saved and decoded as float64
 //
 // Warning: LoadConfigFile only does shallow copies of values in default (take care about race conditions)
-func LoadConfigFile(filepath string, configType ConfigType, defaults map[string]interface{}) (*Config, error) {
+func LoadConfigFile(filepath string, configType ConfigType) (*Config, error) {
 	var config = &Config{
 		Config:   map[string]interface{}{},
 		Filepath: filepath,
 		mu:       sync.RWMutex{},
+		Type:     configType,
 	}
-	defer func() {
-		for k, v := range defaults { // range already check for nil maps
-			if _, ok := config.Config[k]; !ok {
-				config.Config[k] = v
-			}
-		}
-	}()
 	f, err := os.Open(filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -91,7 +85,7 @@ func (c *Config) Put(key string, val interface{}) {
 // SyncWithDefaults will use the map to make up for all value present in default but not in file.
 //
 // Warning: SyncWithDefaults only does shallow copies of values in default (take care about race conditions)
-func (c *Config) SyncWithDefaults(defaults map[string]interface{}) {
+/*func (c *Config) SyncWithDefaults(defaults map[string]interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for k, v := range defaults {
@@ -99,7 +93,7 @@ func (c *Config) SyncWithDefaults(defaults map[string]interface{}) {
 			c.Config[k] = v
 		}
 	}
-}
+}*/
 
 // Warning: GetCopyOfConfig only does shallow copies of values in default (take care about race conditions)
 func (c *Config) GetCopyOfConfig() map[string]interface{} {
